@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Fitness Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; background: #f4f4f4; transition: 0.3s; }
+        .container { max-width: 500px; margin: auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0px 0px 10px rgba(0,0,0,0.1); transition: 0.3s; }
+        input, button, select { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 5px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .hidden { display: none; }
+        .dark-mode { background: #222; color: white; }
+        .dark-mode .container { background: #333; color: white; }
+        .switch { position: absolute; top: 20px; right: 20px; cursor: pointer; font-size: 18px; }
+        .badge { background: gold; color: black; padding: 5px 10px; border-radius: 5px; font-size: 14px; }
+        canvas { max-width: 100%; }
+    </style>
+</head>
+<body>
+
+    <!-- Dark Mode Toggle -->
+    <span class="switch" onclick="toggleDarkMode()"></span>
+
+    <!-- Registration/Login -->
+    <div id="auth" class="container">
+        <h2 id="auth-title">Register</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="register()">Register</button>
+        <button onclick="login()">Login</button>
+        <p id="auth-message"></p>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="container hidden">
+        <h2>Welcome, <span id="user"></span>!</h2>
+        <button onclick="logout()">Logout</button>
+
+        <h3>BMI Calculator</h3>
+        <input type="number" id="weight" placeholder="Weight (kg)">
+        <input type="number" id="height" placeholder="Height (cm)">
+        <button onclick="calculateBMI()">Calculate BMI</button>
+        <p id="bmi-result"></p>
+
+        <h3>Daily Water Intake</h3>
+        <input type="number" id="water" placeholder="Liters">
+        <button onclick="trackWater()">Track Water</button>
+        <p id="water-status"></p>
+
+        <h3>Log Activity</h3>
+        <select id="activity">
+            <option value="Running">Running</option>
+            <option value="Cycling">Cycling</option>
+            <option value="Swimming">Swimming</option>
+            <option value="Yoga">Yoga</option>
+            <option value="Walking">Walking</option>
+        </select>
+        <input type="number" id="duration" placeholder="Duration (minutes)">
+        <input type="number" id="calories" placeholder="Calories Burned">
+        <button onclick="logActivity()">Add Activity</button>
+
+        <h3>Achievement Badge</h3>
+        <p id="badge" class="badge hidden">Fitness Champion</p>
+
+        <h3>Activity Breakdown</h3>
+        <canvas id="pieChart"></canvas>
+
+        <h3>Weekly Progress</h3>
+        <canvas id="chart"></canvas>
+    </div>
+
+    <script>
+        let chartInstance = null;
+        let pieChartInstance = null;
+
+        function show(element) { element.classList.remove('hidden'); }
+        function hide(element) { element.classList.add('hidden'); }
+
+        function register() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (!username || !password) {
+                document.getElementById('auth-message').innerText = "Please fill all fields!";
+                return;
+            }
+
+            if (localStorage.getItem(username)) {
+                document.getElementById('auth-message').innerText = "Username already exists!";
+                return;
+            }
+
+            localStorage.setItem(username, JSON.stringify({ password, activities: [] }));
+            document.getElementById('auth-message').innerText = "Registered successfully! Now login.";
+        }
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            let userData = JSON.parse(localStorage.getItem(username));
+            if (userData && userData.password === password) {
+                localStorage.setItem("loggedInUser", username);
+                loadDashboard();
+            } else {
+                document.getElementById('auth-message').innerText = "Invalid username or password!";
+            }
+        }
+        function logout() {
+            localStorage.removeItem("loggedInUser");
+            hide(document.getElementById('dashboard'));
+            show(document.getElementById('auth'));
+        }
+        function loadDashboard() {
+            const username = localStorage.getItem("loggedInUser");
+            if (!username) return;
+            document.getElementById('user').innerText = username;
+            show(document.getElementById('dashboard'));
+            hide(document.getElementById('auth'));
+            loadActivities();
+        }
+        function calculateBMI() {
+            const weight = document.getElementById('weight').value;
+            const height = document.getElementById('height').value;
+            if (!weight || !height) return;
+            let bmi = (weight / ((height / 100) ** 2)).toFixed(2);
+            let status = bmi < 18.5 ? "Underweight" : bmi < 25 ? "Healthy" : bmi < 30 ? "Overweight" : "Obese";
+            document.getElementById('bmi-result').innerText = `BMI: ${bmi} (${status})`;
+        }
+        function trackWater() {
+            const water = document.getElementById('water').value;
+            document.getElementById('water-status').innerText = `Water Intake: ${water} L`;
+        }
+        function logActivity() {
+            const username = localStorage.getItem("loggedInUser");
+            let userData = JSON.parse(localStorage.getItem(username));
+            userData.activities.push({
+                activity: document.getElementById('activity').value,
+                duration: Number(document.getElementById('duration').value),
+                calories: Number(document.getElementById('calories').value) || 0
+            });
+            if (userData.activities.length >= 5) {
+                show(document.getElementById('badge'));
+            }
+            localStorage.setItem(username, JSON.stringify(userData));
+            loadActivities();
+        }
+        function loadActivities() {
+            const username = localStorage.getItem("loggedInUser");
+            let userData = JSON.parse(localStorage.getItem(username));
+            let activities = userData.activities || [];
+            if (pieChartInstance) pieChartInstance.destroy();
+            let ctxPie = document.getElementById('pieChart').getContext('2d');
+            pieChartInstance = new Chart(ctxPie, {
+                type: 'pie',
+                data: {
+                    labels: activities.map(a => a.activity),
+                    datasets: [{
+                        data: activities.map(a => a.calories),
+                        backgroundColor: ['red', 'blue', 'green', 'yellow', 'orange']
+                    }]
+                }
+            });
+        }
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+        }
+        if (localStorage.getItem("loggedInUser")) loadDashboard();
+    </script>
+</body>
+</html>
