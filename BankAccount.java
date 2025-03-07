@@ -10,7 +10,7 @@ class BankAccount {
         this.accountNumber = accountNumber;
         this.balance = 0.0;
     }
-
+// add a new line
     public void deposit(double amount) {
         if (amount > 0) {
             balance += amount;
